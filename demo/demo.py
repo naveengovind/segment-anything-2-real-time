@@ -18,15 +18,15 @@ from sam2.build_sam import build_sam2_camera_predictor
 import time
 
 
-sam2_checkpoint = "../checkpoints/sam2_hiera_small.pt"
-model_cfg = "sam2_hiera_s.yaml"
+sam2_checkpoint = "../checkpoints/sam2_hiera_tiny.pt"
+model_cfg = "sam2_hiera_t.yaml"
 
 predictor = build_sam2_camera_predictor(model_cfg, sam2_checkpoint)
 
 
 cap = cv2.VideoCapture("../assets/blackswan.mp4")
 if_init = False
-# frame_list = []
+frame_list = []
 
 while True:
     ret, frame = cap.read()
@@ -71,9 +71,9 @@ while True:
 
     cv2.imshow("frame", frame)
 
-    # frame_list.append(frame)
+    frame_list.append(frame)
     if cv2.waitKey(1) & 0xFF == ord("q"):
         break
 
 cap.release()
-# gif = imageio.mimsave("./result.gif", frame_list, "GIF", duration=0.00085)
+gif = imageio.mimsave("./result.gif", frame_list, "GIF", duration=0.00085)
