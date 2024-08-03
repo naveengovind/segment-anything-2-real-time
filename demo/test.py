@@ -2,7 +2,6 @@ import os
 import torch
 import numpy as np
 import cv2
-import imageio
 from ultralytics import YOLO
 
 # Use bfloat16 for the entire script
@@ -24,8 +23,6 @@ model_cfg = "sam2_hiera_t.yaml"
 
 video_path = "../assets/test.mp4"
 cap = cv2.VideoCapture(video_path)
-frame_list = []
-
 frame_idx = 0
 predictor = None
 last_prompt_point = None
@@ -34,14 +31,21 @@ last_prompt_point = None
 output_dir = "output_frames"
 os.makedirs(output_dir, exist_ok=True)
 
+# Get video properties
+fps = int(cap.get(cv2.CAP_PROP_FPS))
+width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+# Define the codec and create VideoWriter object
+fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+out = cv2.VideoWriter('result.mp4', fourcc, fps, (width, height))
+
 while True:
     ret, frame = cap.read()
     if not ret:
         break
 
-    width, height = frame.shape[:2][::-1]
-    
-    if frame_idx % 1 == 0:  # Run YOLO every 15 frames
+    if frame_idx % 1 == 0:  # Run YOLO every frame (you can adjust this if needed)
         try:
             yolo_results = yolo_model(frame)
             
@@ -87,13 +91,15 @@ while True:
         try:
             out_obj_ids, out_mask_logits = predictor.track(frame)
             
-            all_mask = np.zeros((height, width, 1), dtype=np.uint8)
+            # Create a black mask
+            black_mask = np.zeros((height, width, 3), dtype=np.uint8)
+            
             for i in range(len(out_obj_ids)):
-                out_mask = (out_mask_logits[i] > 0.0).permute(1, 2, 0).cpu().numpy().astype(np.uint8) * 255
-                all_mask = cv2.bitwise_or(all_mask, out_mask)
-
-            all_mask = cv2.cvtColor(all_mask, cv2.COLOR_GRAY2BGR)
-            frame_with_mask = cv2.addWeighted(frame, 1, all_mask, 0.5, 0)
+                out_mask = (out_mask_logits[i] > 0.0).permute(1, 2, 0).cpu().numpy().astype(np.uint8)
+                # Apply the black mask to the frame
+                frame[out_mask[:, :, 0] > 0] = [0, 0, 0]
+            
+            frame_with_mask = frame
         except Exception as e:
             print(f"Error tracking: {e}")
             frame_with_mask = frame
@@ -104,13 +110,15 @@ while True:
     if last_prompt_point is not None:
         cv2.circle(frame_with_mask, last_prompt_point, 5, (0, 0, 255), -1)
 
-    # Save the frame as an image file
-    cv2.imwrite(os.path.join(output_dir, f"frame_{frame_idx:04d}.jpg"), frame_with_mask)
-    frame_list.append(frame_with_mask)
+    # Write the frame to the output video
+    out.write(frame_with_mask)
+
+    # Optionally, save individual frames as images
+    # cv2.imwrite(os.path.join(output_dir, f"frame_{frame_idx:04d}.jpg"), frame_with_mask)
 
     frame_idx += 1
 
 cap.release()
+out.release()
 
-# Save as GIF
-gif = imageio.mimsave("./result.gif", frame_list, "GIF", duration=0.033)  # Assuming 30 fps video
+print("Video saved as result.mp4")
